@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"log"
 
 	"github.com/Auto-Edge/autoedge-api/internal/models"
 	"github.com/jackc/pgx/v5"
@@ -53,6 +54,8 @@ func (r *PostgreRegistryRepo) ListModels(ctx context.Context, activeOnly bool) (
 	if activeOnly {
 		query += ` WHERE is_active = true`
 	}
+
+	log.Printf("DEBUG: EWxecuting query: %s", query)
 
 	rows, err := r.db.Query(ctx, query)
 	if err != nil {
