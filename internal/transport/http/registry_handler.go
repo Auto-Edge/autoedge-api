@@ -19,15 +19,13 @@ func NewRegistryHandler(svc *service.RegistryService, storage *service.StorageSe
 }
 
 // RegisterRoutes maps the endpoints
-func (h *RegistryHandler) RegisterRoutes(app *fiber.App) {
-	api := app.Group("/api/v1")
-
+func (h *RegistryHandler) RegisterRoutes(api fiber.Router) {
 	registry := api.Group("/registry")
 	registry.Post("/models", h.CreateModel)
 	registry.Get("/models", h.ListModels)
 	registry.Get("/models/:id", h.GetModel)
 
-	conversion := api.Group("/conversion")
+	conversion := api.Group("/conversions")
 	conversion.Post("/upload", h.UploadModel)
 }
 
@@ -95,14 +93,14 @@ func (h *RegistryHandler) UploadModel(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to upload file to storage"})
 	}
 
-	// Trigger the "Background Task" logic via Service
-	taskID, err := h.svc.StartConversion(c.Context(), key, false)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to queue conversion"})
-	}
+	// // Trigger the "Background Task" logic via Service
+	// taskID, err := h.svc.StartConversion(c.Context(), key, false)
+	// if err != nil {
+	// 	return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to queue conversion"})
+	// }
 
 	return c.JSON(fiber.Map{
-		"task_id": taskID,
+		// "task_id": taskID,
 		"message": "File uploaded and conversion queued",
 		"s3_key":  key,
 	})

@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
@@ -67,9 +68,14 @@ func main() {
 
 	// ---- Wire layers (Repository -> Service -> Handler) -------------------
 	registryRepo := repository.NewPostgreRegistryRepo(pgPool)
+	conversionRepo := repository.NewConversionRepo(pgPool)
+
 	registrySvc := service.NewRegistryService(registryRepo, rdb)
+	conversionSvc := service.NewConversionService(conversionRepo, rdb)
 	storageSvc := service.NewStorageService(s3Client, s3Bucket)
+
 	registryHandler := handler.NewRegistryHandler(registrySvc, storageSvc)
+	conversionHandler := handler.NewConversionHandler(conversionSvc, storageSvc)
 
 	// ---- Fiber app --------------------------------------------------------
 	app := fiber.New(fiber.Config{
@@ -80,13 +86,24 @@ func main() {
 
 	app.Use(logger.New())
 
+	// ---- CORS -------------------------------------------------------------
+	// Allow specific origins in production, or "*" for development
+	allowedOrigins := appConfig.Env("CORS_ORIGINS", "*")
+	app.Use(cors.New(cors.Config{
+		AllowOrigins: allowedOrigins,
+		AllowHeaders: "Origin, Content-Type, Accept",
+	}))
+
 	// Health check
 	app.Get("/healthz", func(c *fiber.Ctx) error {
 		return c.SendString("ok")
 	})
 
+	api := app.Group("/api/v1")
+
 	// Domain routes
-	registryHandler.RegisterRoutes(app)
+	registryHandler.RegisterRoutes(api)
+	conversionHandler.RegisterRoutes(api)
 
 	// ---- Graceful shutdown ------------------------------------------------
 	port := appConfig.Env("PORT", "8080")
