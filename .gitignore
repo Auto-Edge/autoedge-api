@@ -1,5 +1,45 @@
-.env
-bin/
-*.pem
+# --- Build Artifacts ---
+/bin/
+/tmp/
+/dist/
+main
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
 
-tmp/
+# --- Environment & Secrets (CRITICAL) ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.cert
+
+# --- IDE & OS Files ---
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# --- Logs ---
+*.log
+build-errors.log
+
+# --- Go Specific ---
+vendor/
+go.work
+go.work.sum
+
+# --- Test Coverage ---
+coverage.out
+profile.out
+cpu.out
+mem.out
