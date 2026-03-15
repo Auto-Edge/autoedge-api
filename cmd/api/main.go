@@ -8,21 +8,25 @@ import (
 	"syscall"
 	"time"
 
-	awscfg "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/joho/godotenv"
 	"github.com/redis/go-redis/v9"
 
-	"github.com/Auto-Edge/autoedge-api/internal/config"
+	appConfig "github.com/Auto-Edge/autoedge-api/internal/config"
 	"github.com/Auto-Edge/autoedge-api/internal/repository"
 	"github.com/Auto-Edge/autoedge-api/internal/service"
 	handler "github.com/Auto-Edge/autoedge-api/internal/transport/http"
 )
 
 func main() {
+	if err := godotenv.Load(); err != nil {
+		log.Println("info: .env not found, using system environment variables")
+	}
 	// ---- Postgres ---------------------------------------------------------
-	pgDSN := config.Env("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/autoedge?sslmode=disable")
+	pgDSN := appConfig.Env("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/autoedge?sslmode=disable")
 
 	pgPool, err := pgxpool.New(context.Background(), pgDSN)
 	if err != nil {
@@ -38,7 +42,7 @@ func main() {
 	log.Println("postgres: connected")
 
 	// ---- Redis ------------------------------------------------------------
-	redisAddr := config.Env("REDIS_URL", "localhost:6379")
+	redisAddr := appConfig.Env("REDIS_URL", "localhost:6379")
 
 	rdb := redis.NewClient(&redis.Options{
 		Addr: redisAddr,
@@ -53,18 +57,18 @@ func main() {
 	log.Println("redis: connected")
 
 	// ---- AWS S3 -----------------------------------------------------------
-	awsCfg, err := awscfg.LoadDefaultConfig(context.Background())
+	awsCfg, err := config.LoadDefaultConfig(context.TODO())
 	if err != nil {
-		log.Fatalf("aws: unable to load config: %v", err)
+		log.Fatalf("aws: unable to load SDK config: %v", err)
 	}
 	s3Client := s3.NewFromConfig(awsCfg)
+	s3Bucket := appConfig.Env("S3_BUCKET_NAME", "autoedge-uploads")
 
 	// ---- Wire layers (Repository -> Service -> Handler) -------------------
-	modelRepo := repository.NewModelRepository(pgPool)
-	storageSvc := service.NewStorageService(s3Client)
-
-	s3Bucket := config.Env("S3_BUCKET", "autoedge-models")
-	modelHandler := handler.NewModelHandler(modelRepo, storageSvc, rdb, s3Bucket)
+	registryRepo := repository.NewPostgreRegistryRepo(pgPool)
+	registrySvc := service.NewRegistryService(registryRepo, rdb)
+	storageSvc := service.NewStorageService(s3Client, s3Bucket)
+	registryHandler := handler.NewRegistryHandler(registrySvc, storageSvc)
 
 	// ---- Fiber app --------------------------------------------------------
 	app := fiber.New(fiber.Config{
@@ -79,11 +83,10 @@ func main() {
 	})
 
 	// Domain routes
-	api := app.Group("/api/v1")
-	handler.RegisterRoutes(api, modelHandler)
+	registryHandler.RegisterRoutes(app)
 
 	// ---- Graceful shutdown ------------------------------------------------
-	port := config.Env("PORT", "8080")
+	port := appConfig.Env("PORT", "8080")
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
